@@ -1,6 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { algorithms, type SortGenerator, type SortStep } from "./algorithms";
 
+const STORAGE_KEY = "sortvis-options";
+
+type SavedOptions = {
+  size: number;
+  ascending: boolean;
+  evenGaps: boolean;
+  finalSweep: boolean;
+  soundEnabled: boolean;
+  freqMin: number;
+  freqMax: number;
+  speed: number;
+};
+
+function loadOptions(): Partial<SavedOptions> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return {};
+}
+
+function saveOptions(opts: SavedOptions) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(opts));
+  } catch { /* ignore */ }
+}
+
 type Props = {
   algorithmIndex: number;
   onPlayingChange?: (playing: boolean) => void;
@@ -61,15 +88,16 @@ function playWelcomeTone() {
 }
 
 export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
-  const [size, setSize] = useState(30);
-  const [ascending, setAscending] = useState(true);
-  const [evenGaps, setEvenGaps] = useState(false);
-  const [finalSweep, setFinalSweep] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const [freqMin, setFreqMin] = useState(200);
-  const [freqMax, setFreqMax] = useState(1200);
-  const [speed, setSpeed] = useState(20);
-  const [array, setArray] = useState(() => generateArray(30, false));
+  const saved = useRef(loadOptions()).current;
+  const [size, setSize] = useState(saved.size ?? 30);
+  const [ascending, setAscending] = useState(saved.ascending ?? true);
+  const [evenGaps, setEvenGaps] = useState(saved.evenGaps ?? false);
+  const [finalSweep, setFinalSweep] = useState(saved.finalSweep ?? false);
+  const [soundEnabled, setSoundEnabled] = useState(saved.soundEnabled ?? false);
+  const [freqMin, setFreqMin] = useState(saved.freqMin ?? 200);
+  const [freqMax, setFreqMax] = useState(saved.freqMax ?? 1200);
+  const [speed, setSpeed] = useState(saved.speed ?? 20);
+  const [array, setArray] = useState(() => generateArray(saved.size ?? 30, saved.evenGaps ?? false));
   const [initialArray, setInitialArray] = useState<number[]>(() => [...array]);
   const [comparing, setComparing] = useState<[number, number] | null>(null);
   const [swapping, setSwapping] = useState<[number, number] | null>(null);
@@ -80,19 +108,30 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
 
   const generatorRef = useRef<SortGenerator | null>(null);
   const frameRef = useRef<number>(0);
-  const speedRef = useRef(20);
+  const speedRef = useRef(saved.speed ?? 20);
   const playingRef = useRef(false);
   const sweepingRef = useRef(false);
-  const soundRef = useRef(false);
-  const freqMinRef = useRef(200);
-  const freqMaxRef = useRef(1200);
-  const finalSweepRef = useRef(false);
+  const soundRef = useRef(saved.soundEnabled ?? false);
+  const freqMinRef = useRef(saved.freqMin ?? 200);
+  const freqMaxRef = useRef(saved.freqMax ?? 1200);
+  const finalSweepRef = useRef(saved.finalSweep ?? false);
   const welcomePlayedRef = useRef(false);
 
   soundRef.current = soundEnabled;
   freqMinRef.current = freqMin;
   freqMaxRef.current = freqMax;
   finalSweepRef.current = finalSweep;
+
+  // Persist options to localStorage
+  useEffect(() => {
+    saveOptions({ size, ascending, evenGaps, finalSweep, soundEnabled, freqMin, freqMax, speed });
+  }, [size, ascending, evenGaps, finalSweep, soundEnabled, freqMin, freqMax, speed]);
+
+  // Draft states for number inputs (validate on blur, not on every keystroke)
+  const [sizeDraft, setSizeDraft] = useState<string | null>(null);
+  const [speedDraft, setSpeedDraft] = useState<string | null>(null);
+  const [freqMinDraft, setFreqMinDraft] = useState<string | null>(null);
+  const [freqMaxDraft, setFreqMaxDraft] = useState<string | null>(null);
 
   // Play welcome tone on first user interaction to initialize AudioContext
   useEffect(() => {
@@ -395,10 +434,13 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                   type="number"
                   min={10}
                   max={150}
-                  value={size}
-                  onChange={(e) => {
-                    const v = Math.max(10, Math.min(150, Number(e.target.value) || 10));
+                  value={sizeDraft ?? size}
+                  onFocus={() => setSizeDraft(String(size))}
+                  onChange={(e) => setSizeDraft(e.target.value)}
+                  onBlur={() => {
+                    const v = Math.max(10, Math.min(150, Number(sizeDraft) || 10));
                     setSize(v);
+                    setSizeDraft(null);
                   }}
                   disabled={playing}
                 />
@@ -421,12 +463,15 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                   type="number"
                   min={1}
                   max={50}
-                  value={51 - speed}
-                  onChange={(e) => {
-                    const raw = Math.max(1, Math.min(50, Number(e.target.value) || 1));
+                  value={speedDraft ?? (51 - speed)}
+                  onFocus={() => setSpeedDraft(String(51 - speed))}
+                  onChange={(e) => setSpeedDraft(e.target.value)}
+                  onBlur={() => {
+                    const raw = Math.max(1, Math.min(50, Number(speedDraft) || 1));
                     const v = 51 - raw;
                     setSpeed(v);
                     speedRef.current = v;
+                    setSpeedDraft(null);
                   }}
                 />
               </div>
@@ -461,8 +506,13 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                     type="number"
                     min={50}
                     max={800}
-                    value={freqMin}
-                    onChange={(e) => setFreqMin(Math.max(50, Math.min(800, Number(e.target.value) || 50)))}
+                    value={freqMinDraft ?? freqMin}
+                    onFocus={() => setFreqMinDraft(String(freqMin))}
+                    onChange={(e) => setFreqMinDraft(e.target.value)}
+                    onBlur={() => {
+                      setFreqMin(Math.max(50, Math.min(800, Number(freqMinDraft) || 50)));
+                      setFreqMinDraft(null);
+                    }}
                     disabled={!soundEnabled}
                   />
                   <span className="slider-unit">Hz</span>
@@ -482,8 +532,13 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                     type="number"
                     min={400}
                     max={4000}
-                    value={freqMax}
-                    onChange={(e) => setFreqMax(Math.max(400, Math.min(4000, Number(e.target.value) || 400)))}
+                    value={freqMaxDraft ?? freqMax}
+                    onFocus={() => setFreqMaxDraft(String(freqMax))}
+                    onChange={(e) => setFreqMaxDraft(e.target.value)}
+                    onBlur={() => {
+                      setFreqMax(Math.max(400, Math.min(4000, Number(freqMaxDraft) || 400)));
+                      setFreqMaxDraft(null);
+                    }}
                     disabled={!soundEnabled}
                   />
                   <span className="slider-unit">Hz</span>
