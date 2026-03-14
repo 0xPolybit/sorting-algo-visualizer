@@ -2,6 +2,7 @@ import { algorithms } from "./algorithms";
 import { TbCircles } from "react-icons/tb";
 import { LuMousePointerClick, LuArrowDownToLine, LuZap, LuHash } from "react-icons/lu";
 import { TbArrowsSplit2, TbBinaryTree } from "react-icons/tb";
+import { FaGithub, FaLinkedin, FaInstagram } from "react-icons/fa";
 import type { IconType } from "react-icons";
 
 const algoIcons: Record<string, IconType> = {
@@ -46,6 +47,39 @@ export default function Sidebar({ selected, onSelect, disabled }: Props) {
           );
         })}
       </ul>
+
+      {/* Social Links */}
+      <div className="social-section">
+        <div className="social-links">
+          <a
+            href="https://github.com/0xPolybit"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="social-link"
+            title="GitHub"
+          >
+            <FaGithub />
+          </a>
+          <a
+            href="https://www.linkedin.com/in/polybit/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="social-link"
+            title="LinkedIn"
+          >
+            <FaLinkedin />
+          </a>
+          <a
+            href="https://www.instagram.com/swastikbiswas1776"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="social-link"
+            title="Instagram"
+          >
+            <FaInstagram />
+          </a>
+        </div>
+      </div>
     </aside>
   );
 }

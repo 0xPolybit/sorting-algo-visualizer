@@ -12,7 +12,8 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 24px 0;
+  height: 100vh;
+  padding: 24px 0 0 0;
 }
 
 .sidebar-title {
@@ -27,6 +28,7 @@
 
 .sidebar-list {
   list-style: none;
+  flex: 1;
 }
 
 .sidebar-item {
@@ -347,4 +349,34 @@
 .sound-options.disabled {
   opacity: 0.35;
   pointer-events: none;
+}
+
+/* Social Section */
+.social-section {
+  padding: 20px 24px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.social-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: var(--text-dim);
+  font-size: 18px;
+  border-radius: 50%;
+  transition: color 0.15s, background-color 0.15s;
+  text-decoration: none;
+}
+
+.social-link:hover {
+  color: var(--primary);
+  background-color: var(--surface-2);
 }
