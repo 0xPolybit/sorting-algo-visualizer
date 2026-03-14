@@ -6,8 +6,8 @@
 /* ---- Sidebar ---- */
 
 .sidebar {
-  width: 220px;
-  min-width: 220px;
+  width: 260px;
+  min-width: 260px;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -31,7 +31,8 @@
 
 .sidebar-item {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   width: 100%;
   padding: 10px 20px;
   background: none;
@@ -43,6 +44,17 @@
   text-align: left;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
+  gap: 12px;
+}
+
+.sidebar-item-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.sidebar-item-text {
+  display: flex;
+  flex-direction: column;
   gap: 2px;
 }
 
