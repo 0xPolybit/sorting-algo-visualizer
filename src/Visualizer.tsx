@@ -49,42 +49,68 @@ function generateArray(size: number, evenGaps: boolean): number[] {
 
 // Audio context singleton
 let audioCtx: AudioContext | null = null;
-function getAudioCtx(): AudioContext {
-  if (!audioCtx) audioCtx = new AudioContext();
+async function getAudioCtx(): Promise<AudioContext> {
+  if (!audioCtx) {
+    audioCtx = new AudioContext();
+  }
+
+  // Ensure the context is running
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+
   return audioCtx;
 }
 
-function playTone(value: number, maxVal: number, freqMin: number, freqMax: number) {
-  const ctx = getAudioCtx();
-  const freq = freqMin + (value / maxVal) * (freqMax - freqMin);
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = "sine";
-  osc.frequency.value = freq;
-  gain.gain.value = 0.08;
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start();
-  osc.stop(ctx.currentTime + 0.08);
-}
-
-function playWelcomeTone() {
-  const ctx = getAudioCtx();
-  const notes = [523, 659, 784];
-  notes.forEach((freq, i) => {
+async function playTone(value: number, maxVal: number, freqMin: number, freqMax: number) {
+  try {
+    const ctx = await getAudioCtx();
+    const freq = freqMin + (value / maxVal) * (freqMax - freqMin);
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
     osc.frequency.value = freq;
-    const start = ctx.currentTime + i * 0.12;
-    gain.gain.setValueAtTime(0.06, start);
-    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.15);
+    gain.gain.value = 0.08;
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.start(start);
-    osc.stop(start + 0.15);
-  });
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  } catch (e) {
+    // Silently fail if audio can't play
+    console.warn('Audio playback failed:', e);
+  }
+}
+
+async function playWelcomeTone() {
+  try {
+    const ctx = await getAudioCtx();
+    const notes = [523, 659, 784];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const start = ctx.currentTime + i * 0.12;
+      gain.gain.setValueAtTime(0.06, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.15);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.15);
+    });
+  } catch (e) {
+    console.warn('Welcome tone failed:', e);
+  }
+}
+
+// Pre-warm audio context to ensure it's ready
+async function initAudio() {
+  try {
+    await getAudioCtx();
+  } catch (e) {
+    console.warn('Audio initialization failed:', e);
+  }
 }
 
 export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
@@ -133,12 +159,19 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
   const [freqMinDraft, setFreqMinDraft] = useState<string | null>(null);
   const [freqMaxDraft, setFreqMaxDraft] = useState<string | null>(null);
 
+  // Pre-warm audio context when sound is enabled
+  useEffect(() => {
+    if (soundEnabled) {
+      initAudio().catch(() => {}); // Pre-warm the audio context
+    }
+  }, [soundEnabled]);
+
   // Play welcome tone on first user interaction to initialize AudioContext
   useEffect(() => {
     const handler = () => {
       if (!welcomePlayedRef.current) {
         welcomePlayedRef.current = true;
-        playWelcomeTone();
+        playWelcomeTone().catch(() => {}); // Fire and forget
       }
       window.removeEventListener("click", handler);
       window.removeEventListener("keydown", handler);
@@ -170,7 +203,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
       }
       setSweepIndex(idx);
       if (soundRef.current) {
-        playTone(arr[idx], maxVal, freqMinRef.current, freqMaxRef.current);
+        playTone(arr[idx], maxVal, freqMinRef.current, freqMaxRef.current).catch(() => {}); // Fire and forget
       }
       idx++;
       frameRef.current = requestAnimationFrame(tick);
@@ -261,9 +294,9 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
     if (soundRef.current) {
       const maxVal = Math.max(...val.array, 1);
       if (val.comparing) {
-        playTone(val.array[val.comparing[0]], maxVal, freqMinRef.current, freqMaxRef.current);
+        playTone(val.array[val.comparing[0]], maxVal, freqMinRef.current, freqMaxRef.current).catch(() => {}); // Fire and forget
       } else if (val.swapping) {
-        playTone(val.array[val.swapping[0]], maxVal, freqMinRef.current, freqMaxRef.current);
+        playTone(val.array[val.swapping[0]], maxVal, freqMinRef.current, freqMaxRef.current).catch(() => {}); // Fire and forget
       }
     }
   }, [doSweep]);
