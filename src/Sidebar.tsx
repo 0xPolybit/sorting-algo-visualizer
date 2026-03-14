@@ -1,4 +1,18 @@
 import { algorithms } from "./algorithms";
+import { TbCircles } from "react-icons/tb";
+import { LuMousePointerClick, LuArrowDownToLine, LuZap, LuHash } from "react-icons/lu";
+import { TbArrowsSplit2, TbBinaryTree } from "react-icons/tb";
+import type { IconType } from "react-icons";
+
+const algoIcons: Record<string, IconType> = {
+  "Bubble Sort": TbCircles,
+  "Selection Sort": LuMousePointerClick,
+  "Insertion Sort": LuArrowDownToLine,
+  "Merge Sort": TbArrowsSplit2,
+  "Quick Sort": LuZap,
+  "Heap Sort": TbBinaryTree,
+  "Counting Sort": LuHash,
+};
 
 type Props = {
   selected: number;
@@ -11,20 +25,26 @@ export default function Sidebar({ selected, onSelect, disabled }: Props) {
     <aside className="sidebar">
       <h2 className="sidebar-title">Algorithms</h2>
       <ul className="sidebar-list">
-        {algorithms.map((algo, i) => (
-          <li key={algo.name}>
-            <button
-              className={`sidebar-item${i === selected ? " active" : ""}`}
-              onClick={() => onSelect(i)}
-              disabled={disabled}
-            >
-              <span className="sidebar-item-name">{algo.name}</span>
-              <span className="sidebar-item-complexity">
-                Time: {algo.time} &middot; Space: {algo.space}
-              </span>
-            </button>
-          </li>
-        ))}
+        {algorithms.map((algo, i) => {
+          const Icon = algoIcons[algo.name];
+          return (
+            <li key={algo.name}>
+              <button
+                className={`sidebar-item${i === selected ? " active" : ""}`}
+                onClick={() => onSelect(i)}
+                disabled={disabled}
+              >
+                {Icon && <Icon className="sidebar-item-icon" />}
+                <div className="sidebar-item-text">
+                  <span className="sidebar-item-name">{algo.name}</span>
+                  <span className="sidebar-item-complexity">
+                    Time: {algo.time} &middot; Space: {algo.space}
+                  </span>
+                </div>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </aside>
   );
