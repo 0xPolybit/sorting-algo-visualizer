@@ -1,3 +1,10 @@
+@font-face {
+  font-family: "GeistPixel";
+  src: url("../node_modules/geist/dist/fonts/geist-pixel/GeistPixel-Square.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+}
+
 :root {
   --primary: #d4d4d8;    /* zinc-300 */
   --bg: #09090b;         /* zinc-950 */
@@ -16,7 +23,7 @@
 }
 
 body {
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family: "GeistPixel", ui-monospace, monospace;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;

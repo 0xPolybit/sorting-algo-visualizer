@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { algorithms, type SortGenerator, type SortStep } from "./algorithms";
+import { initAudio, playTone, playClick, playToggle, playSliderTick } from "./audio";
 
 const STORAGE_KEY = "sortvis-options";
 
@@ -47,72 +48,6 @@ function generateArray(size: number, evenGaps: boolean): number[] {
   return Array.from({ length: size }, () => Math.floor(Math.random() * 95) + 5);
 }
 
-// Audio context singleton
-let audioCtx: AudioContext | null = null;
-async function getAudioCtx(): Promise<AudioContext> {
-  if (!audioCtx) {
-    audioCtx = new AudioContext();
-  }
-
-  // Ensure the context is running
-  if (audioCtx.state === 'suspended') {
-    await audioCtx.resume();
-  }
-
-  return audioCtx;
-}
-
-async function playTone(value: number, maxVal: number, freqMin: number, freqMax: number) {
-  try {
-    const ctx = await getAudioCtx();
-    const freq = freqMin + (value / maxVal) * (freqMax - freqMin);
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    gain.gain.value = 0.08;
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.08);
-  } catch (e) {
-    // Silently fail if audio can't play
-    console.warn('Audio playback failed:', e);
-  }
-}
-
-async function playWelcomeTone() {
-  try {
-    const ctx = await getAudioCtx();
-    const notes = [523, 659, 784];
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      const start = ctx.currentTime + i * 0.12;
-      gain.gain.setValueAtTime(0.06, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.15);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(start);
-      osc.stop(start + 0.15);
-    });
-  } catch (e) {
-    console.warn('Welcome tone failed:', e);
-  }
-}
-
-// Pre-warm audio context to ensure it's ready
-async function initAudio() {
-  try {
-    await getAudioCtx();
-  } catch (e) {
-    console.warn('Audio initialization failed:', e);
-  }
-}
-
 export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
   const saved = useRef(loadOptions()).current;
   const [size, setSize] = useState(saved.size ?? 30);
@@ -141,7 +76,6 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
   const freqMinRef = useRef(saved.freqMin ?? 200);
   const freqMaxRef = useRef(saved.freqMax ?? 1200);
   const finalSweepRef = useRef(saved.finalSweep ?? false);
-  const welcomePlayedRef = useRef(false);
 
   soundRef.current = soundEnabled;
   freqMinRef.current = freqMin;
@@ -159,29 +93,9 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
   const [freqMinDraft, setFreqMinDraft] = useState<string | null>(null);
   const [freqMaxDraft, setFreqMaxDraft] = useState<string | null>(null);
 
-  // Pre-warm audio context when sound is enabled
+  // Pre-warm audio context
   useEffect(() => {
-    if (soundEnabled) {
-      initAudio().catch(() => {}); // Pre-warm the audio context
-    }
-  }, [soundEnabled]);
-
-  // Play welcome tone on first user interaction to initialize AudioContext
-  useEffect(() => {
-    const handler = () => {
-      if (!welcomePlayedRef.current) {
-        welcomePlayedRef.current = true;
-        playWelcomeTone().catch(() => {}); // Fire and forget
-      }
-      window.removeEventListener("click", handler);
-      window.removeEventListener("keydown", handler);
-    };
-    window.addEventListener("click", handler);
-    window.addEventListener("keydown", handler);
-    return () => {
-      window.removeEventListener("click", handler);
-      window.removeEventListener("keydown", handler);
-    };
+    initAudio().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -363,7 +277,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
         <div className="playback-row">
           <button
             className="playback-btn"
-            onClick={reset}
+            onClick={() => { playClick(); reset(); }}
             disabled={playing}
             title="Reset"
           >
@@ -378,7 +292,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
           {!playing ? (
             <button
               className="playback-btn play-btn"
-              onClick={done ? () => { reset(); } : play}
+              onClick={done ? () => { playClick(); reset(); } : () => { playClick(); play(); }}
               title={done ? "Replay" : "Play"}
             >
               <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
@@ -388,7 +302,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
           ) : (
             <button
               className="playback-btn play-btn"
-              onClick={pause}
+              onClick={() => { playClick(); pause(); }}
               title="Pause"
             >
               <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
@@ -399,7 +313,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
           )}
           <button
             className="playback-btn"
-            onClick={goBack}
+            onClick={() => { playClick(); goBack(); }}
             disabled={!canGoBack}
             title="Go Back"
           >
@@ -421,7 +335,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                 <span className="toggle-label-text">{ascending ? "Ascending" : "Descending"}</span>
                 <button
                   className={`toggle-switch${ascending ? " on" : ""}`}
-                  onClick={() => { if (!playing) setAscending((a) => !a); }}
+                  onClick={() => { if (!playing) { setAscending((a) => { playToggle(!a); return !a; }); } }}
                   disabled={playing}
                   role="switch"
                   aria-checked={ascending}
@@ -433,7 +347,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                 <span className="toggle-label-text">Even Gaps</span>
                 <button
                   className={`toggle-switch${evenGaps ? " on" : ""}`}
-                  onClick={() => { if (!playing) setEvenGaps((v) => !v); }}
+                  onClick={() => { if (!playing) { setEvenGaps((v) => { playToggle(!v); return !v; }); } }}
                   disabled={playing}
                   role="switch"
                   aria-checked={evenGaps}
@@ -445,7 +359,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                 <span className="toggle-label-text">Final Sweep</span>
                 <button
                   className={`toggle-switch${finalSweep ? " on" : ""}`}
-                  onClick={() => setFinalSweep((v) => !v)}
+                  onClick={() => setFinalSweep((v) => { playToggle(!v); return !v; })}
                   role="switch"
                   aria-checked={finalSweep}
                 >
@@ -459,7 +373,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                   min={10}
                   max={150}
                   value={size}
-                  onChange={(e) => setSize(Number(e.target.value))}
+                  onChange={(e) => { const v = Number(e.target.value); setSize(v); playSliderTick((v - 10) / 140); }}
                   disabled={playing}
                 />
                 <input
@@ -489,6 +403,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                     const v = 51 - Number(e.target.value);
                     setSpeed(v);
                     speedRef.current = v;
+                    playSliderTick(Number(e.target.value) / 50);
                   }}
                 />
                 <input
@@ -516,7 +431,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                 <span className="toggle-label-text">Sound</span>
                 <button
                   className={`toggle-switch${soundEnabled ? " on" : ""}`}
-                  onClick={() => setSoundEnabled((v) => !v)}
+                  onClick={() => setSoundEnabled((v) => { playToggle(!v); return !v; })}
                   role="switch"
                   aria-checked={soundEnabled}
                 >
@@ -531,7 +446,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                     min={50}
                     max={800}
                     value={freqMin}
-                    onChange={(e) => setFreqMin(Number(e.target.value))}
+                    onChange={(e) => { const v = Number(e.target.value); setFreqMin(v); playSliderTick((v - 50) / 750); }}
                     disabled={!soundEnabled}
                   />
                   <input
@@ -557,7 +472,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                     min={400}
                     max={4000}
                     value={freqMax}
-                    onChange={(e) => setFreqMax(Number(e.target.value))}
+                    onChange={(e) => { const v = Number(e.target.value); setFreqMax(v); playSliderTick((v - 400) / 3600); }}
                     disabled={!soundEnabled}
                   />
                   <input

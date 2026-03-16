@@ -1,4 +1,5 @@
 import { algorithms } from "./algorithms";
+import { playSelect } from "./audio";
 import { TbCircles } from "react-icons/tb";
 import { LuMousePointerClick, LuArrowDownToLine, LuZap, LuHash } from "react-icons/lu";
 import { TbArrowsSplit2, TbBinaryTree } from "react-icons/tb";
@@ -32,7 +33,7 @@ export default function Sidebar({ selected, onSelect, disabled }: Props) {
             <li key={algo.name}>
               <button
                 className={`sidebar-item${i === selected ? " active" : ""}`}
-                onClick={() => onSelect(i)}
+                onClick={() => { playSelect(); onSelect(i); }}
                 disabled={disabled}
               >
                 {Icon && <Icon className="sidebar-item-icon" />}
