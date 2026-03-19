@@ -3,6 +3,8 @@ import { algorithms, type SortGenerator, type SortStep } from "./algorithms";
 import { initAudio, playTone, playClick, playToggle, playSliderTick } from "./audio";
 
 const STORAGE_KEY = "sortvis-options";
+const ELEMENT_MIN = 10;
+const ELEMENT_MAX = 150;
 
 type SavedOptions = {
   size: number;
@@ -66,6 +68,11 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
   const [playing, setPlaying] = useState(false);
   const [done, setDone] = useState(false);
   const [started, setStarted] = useState(false);
+  const [arrayFromUserInput, setArrayFromUserInput] = useState(false);
+  const [initialArrayFromUserInput, setInitialArrayFromUserInput] = useState(false);
+  const [showInputModal, setShowInputModal] = useState(false);
+  const [userInputText, setUserInputText] = useState("");
+  const [userInputError, setUserInputError] = useState("");
 
   const generatorRef = useRef<SortGenerator | null>(null);
   const frameRef = useRef<number>(0);
@@ -76,6 +83,7 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
   const freqMinRef = useRef(saved.freqMin ?? 200);
   const freqMaxRef = useRef(saved.freqMax ?? 1200);
   const finalSweepRef = useRef(saved.finalSweep ?? false);
+  const suppressAutoResetRef = useRef(false);
 
   soundRef.current = soundEnabled;
   freqMinRef.current = freqMin;
@@ -140,6 +148,8 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
     const newArr = generateArray(size, evenGaps);
     setArray(newArr);
     setInitialArray([...newArr]);
+    setArrayFromUserInput(false);
+    setInitialArrayFromUserInput(false);
   }, [size, evenGaps]);
 
   // Go back: restore initial array without re-randomizing
@@ -155,10 +165,15 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
     cancelAnimationFrame(frameRef.current);
     generatorRef.current = null;
     setArray([...initialArray]);
-  }, [initialArray]);
+    setArrayFromUserInput(initialArrayFromUserInput);
+  }, [initialArray, initialArrayFromUserInput]);
 
   // Re-randomize when size or evenGaps change
   useEffect(() => {
+    if (suppressAutoResetRef.current) {
+      suppressAutoResetRef.current = false;
+      return;
+    }
     reset();
   }, [size, evenGaps, reset]);
 
@@ -179,8 +194,9 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
       generatorRef.current = null;
       // Restore to initial array (unsorted state)
       setArray([...initialArray]);
+      setArrayFromUserInput(initialArrayFromUserInput);
     }
-  }, [algorithmIndex, initialArray]);
+  }, [algorithmIndex, initialArray, initialArrayFromUserInput]);
 
   const arrayRef = useRef(array);
   arrayRef.current = array;
@@ -246,6 +262,56 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
     cancelAnimationFrame(frameRef.current);
   }, []);
 
+  const applyUserInput = useCallback(() => {
+    const tokens = userInputText
+      .trim()
+      .split(/[\s,]+/)
+      .filter(Boolean);
+
+    if (tokens.length === 0) {
+      setUserInputError("Enter at least one number.");
+      return;
+    }
+
+    if (tokens.length < ELEMENT_MIN || tokens.length > ELEMENT_MAX) {
+      setUserInputError(`Element count must be between ${ELEMENT_MIN} and ${ELEMENT_MAX} to match the slider limits.`);
+      return;
+    }
+
+    const parsed = tokens.map((token) => Number(token));
+    if (parsed.some((value) => !Number.isFinite(value))) {
+      setUserInputError("Use only valid numbers separated by commas or spaces.");
+      return;
+    }
+
+    if (parsed.some((value) => value < 0)) {
+      setUserInputError("Only non-negative numbers are supported in the visualizer.");
+      return;
+    }
+
+    playingRef.current = false;
+    sweepingRef.current = false;
+    setPlaying(false);
+    setDone(false);
+    setStarted(false);
+    setComparing(null);
+    setSwapping(null);
+    setSweepIndex(null);
+    cancelAnimationFrame(frameRef.current);
+    generatorRef.current = null;
+
+    suppressAutoResetRef.current = true;
+    setSize(parsed.length);
+    setSizeDraft(null);
+    setArray(parsed);
+    setInitialArray([...parsed]);
+    setArrayFromUserInput(true);
+    setInitialArrayFromUserInput(true);
+
+    setUserInputError("");
+    setShowInputModal(false);
+  }, [userInputText]);
+
   const maxVal = Math.max(...array, 1);
 
   // Go-back is enabled when not currently playing AND the animation has been started (paused or done)
@@ -275,6 +341,21 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
       <div className="controls">
         {/* Playback row */}
         <div className="playback-row">
+          <button
+            className={`playback-btn input-btn${arrayFromUserInput ? " active" : ""}`}
+            onClick={() => {
+              playClick();
+              setUserInputError("");
+              setUserInputText(initialArray.join(", "));
+              setShowInputModal(true);
+            }}
+            disabled={playing}
+            title="Custom Input"
+            aria-label="Open custom input"
+          >
+            <span className="brace-icon">{"{"}</span>
+            <span className="brace-icon">{"}"}</span>
+          </button>
           <button
             className="playback-btn"
             onClick={() => { playClick(); reset(); }}
@@ -370,22 +451,26 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
                 <span className="slider-label-text">Elements</span>
                 <input
                   type="range"
-                  min={10}
-                  max={150}
+                  min={ELEMENT_MIN}
+                  max={ELEMENT_MAX}
                   value={size}
-                  onChange={(e) => { const v = Number(e.target.value); setSize(v); playSliderTick((v - 10) / 140); }}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setSize(v);
+                    playSliderTick((v - ELEMENT_MIN) / (ELEMENT_MAX - ELEMENT_MIN));
+                  }}
                   disabled={playing}
                 />
                 <input
                   className="slider-num"
                   type="number"
-                  min={10}
-                  max={150}
+                  min={ELEMENT_MIN}
+                  max={ELEMENT_MAX}
                   value={sizeDraft ?? size}
                   onFocus={() => setSizeDraft(String(size))}
                   onChange={(e) => setSizeDraft(e.target.value)}
                   onBlur={() => {
-                    const v = Math.max(10, Math.min(150, Number(sizeDraft) || 10));
+                    const v = Math.max(ELEMENT_MIN, Math.min(ELEMENT_MAX, Number(sizeDraft) || ELEMENT_MIN));
                     setSize(v);
                     setSizeDraft(null);
                   }}
@@ -496,6 +581,43 @@ export default function Visualizer({ algorithmIndex, onPlayingChange }: Props) {
           </div>
         </div>
       </div>
+
+      {showInputModal && (
+        <div className="input-modal-overlay" onClick={() => setShowInputModal(false)}>
+          <div className="input-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="input-modal-title">Custom Array Input</h3>
+            <p className="input-modal-hint">
+              Enter numbers separated by commas or spaces. Element count must stay between {ELEMENT_MIN} and {ELEMENT_MAX}.
+            </p>
+            <textarea
+              className="input-modal-textarea"
+              value={userInputText}
+              onChange={(e) => {
+                setUserInputText(e.target.value);
+                if (userInputError) setUserInputError("");
+              }}
+              rows={5}
+              placeholder="Example: 42, 7, 19 3 88"
+              autoFocus
+            />
+            {userInputError && <div className="input-modal-error">{userInputError}</div>}
+            <div className="input-modal-actions">
+              <button
+                className="input-modal-btn"
+                onClick={() => setShowInputModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="input-modal-btn primary"
+                onClick={applyUserInput}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
